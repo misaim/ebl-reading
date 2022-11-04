@@ -9,13 +9,13 @@ Python 3.9+
 ## Usage
 Reads EXB folders in "input" folder. Writes to output. Need to add usage flags but i'm lazy. Structure looks like the following:
 
-- Sample.exb/
-- Sample.exb
-- SamplePool/
-- Sample1.ebl
-- Sample1.ebl
-- etc...
-
+    Sample.exb/
+      Sample.exb
+      SamplePool/
+        Sample1.ebl
+        Sample1.ebl
+        etc...
+        
 ## EM-U and Emulator X-3
 E-mu *was* a software sampler from 1997. They released a number of Sample CD's, containing many small audio files intended to be used with a sampler to make music.
 
