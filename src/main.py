@@ -9,6 +9,7 @@ __debug_mode__ = False
 
 import argparse
 from pathlib import Path
+from syslog import LOG_LOCAL0
 
 # TODO: import logging
 # this is currently BROKEN
@@ -26,29 +27,63 @@ def debug_mode(header: dict) -> None:
     return None
 
 
-def validate_directories(input_dir: Path, output_dir: Path) -> None:
-    list_of_directories = [input_dir, output_dir]
-
-    for directories in list_of_directories:
-        if not directories.exists():
-            try:
-                Path(input_dir).mkdir(parents=True, exist_ok=True)
-            except FileExistsError:
-                print("Folder is already there")
+def recursive_scan(input_dir: Path) -> None:
+    print(f"Scanning {input_dir.absolute()}/ ...", end='')
+    directory_dict = {}
+    for p in input_dir.rglob("*"):
+        if p.suffix == ".ebl":
+            input_dir_suffix = str(p.parent).split(str(input_dir))[1]
+            output_dir_stem = Path(str(output_dir) + input_dir_suffix)
+            if input_dir_suffix in directory_dict:
+                directory_dict[input_dir_suffix].append({'filename': p.name, 'input_dir': p.parent, 'output_dir': output_dir_stem})
             else:
-                print("Folder was created")
+                directory_dict[input_dir_suffix] = [{'filename': p.name, 'input_dir': p.parent, 'output_dir': output_dir_stem}]
+    print("Done.")
 
+    # Fucks off the "" element (root). Not required by pathlib but looks pretty.
+    if "" in directory_dict: 
+        directory_dict["/"] = directory_dict[""]
+        directory_dict.pop("")
+
+    for key in directory_dict:
+        number_files = len(directory_dict[key])
+        print(f"\t{key} - {number_files} file(s).")
+        if not vars(args)['no_write']: 
+            output_location = Path(str(output_dir)+key)
+            output_location.mkdir(parents=True, exist_ok=True)
+            Path(output_dir, "errors").mkdir(parents=True, exist_ok=True)
+            i = 1
+            for file in directory_dict[key]:
+                input_file = Path(file['input_dir'], file['filename'])
+                output_file = Path(file['output_dir'], file['filename'])
+                print(f"Converting file {i}/{number_files}", end='\r')
+                try:
+                    convert_file(input_file, file['output_dir'])
+                except:
+                    print(f"cant read {input_file}... ")
+                    if vars(args)['error_save']:
+                        Path(output_dir, "errors/", file['filename']).write_bytes(input_file.read_bytes())
+                else:
+                    i += 1
+            print(f"\nConverted {i} files.", end="\n")
     return None
+    
+            
 
 
-def read_files(input_dir: Path) -> None:
-    for ebl_file in input_dir.iterdir():
-        if ebl_file.suffix == ".ebl":
-            print(f"Converting {ebl_file.name}")
-            convert_file(ebl_file, output_dir)
+def validate_directories(input_dir: Path, output_dir: Path) -> None:
 
+    # We shouldn't be creating input dir's.
+    # So just do it for outputs. 
+    try:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+    except FileExistsError:
+        print("Folder is already there")
+    else:
+        print("Folder was created")
+    finally:
+        print(f"Checked dir: {output_dir.name}")
     return None
-
 
 def convert_file(input_file: Path, output_dir: Path):
     with open(input_file, mode="rb") as file:
@@ -185,48 +220,54 @@ def convert_file(input_file: Path, output_dir: Path):
     wav_data_size = channel_size * wav_channels
     wav_file_size = wav_data_size + 36
 
-    xx = file_name_1.replace("\x00", "") + ".wav"
-    with open(Path(output_dir, xx), mode="wb") as file:
-        file.write(b"RIFF")
-        file.write(wav_file_size.to_bytes(4, byteorder="little"))
-        file.write(b"WAVE")
-        file.write(b"fmt ")
-        file.write(
-            wav_header_length.to_bytes(4, byteorder="little")
-        )  # Write 16 (header length 32 bit)
-        file.write(wav_pcm_mode.to_bytes(2, byteorder="little"))  # Write 1 (16 bit)
-        file.write(
-            wav_channels.to_bytes(2, byteorder="little")
-        )  # Write # channels (16 bit)
-        file.write(
-            wav_sample_rate.to_bytes(4, byteorder="little")
-        )  # Write Sample Rate, 32 bit int
+    if vars(args)['no_write']:
+        print('Not Writing to disk...')
+    else:
+        if vars(args)['preserve_filename']:
+            xx = input_file.stem + '.wav'
+        else:
+            xx = file_name_1.replace("\x00", "") + ".wav"
+        with open(Path(output_dir, xx), mode="wb") as file:
+            file.write(b"RIFF")
+            file.write(wav_file_size.to_bytes(4, byteorder="little"))
+            file.write(b"WAVE")
+            file.write(b"fmt ")
+            file.write(
+                wav_header_length.to_bytes(4, byteorder="little")
+            )  # Write 16 (header length 32 bit)
+            file.write(wav_pcm_mode.to_bytes(2, byteorder="little"))  # Write 1 (16 bit)
+            file.write(
+                wav_channels.to_bytes(2, byteorder="little")
+            )  # Write # channels (16 bit)
+            file.write(
+                wav_sample_rate.to_bytes(4, byteorder="little")
+            )  # Write Sample Rate, 32 bit int
 
-        file.write(
-            wav_byte_rate.to_bytes(4, byteorder="little")
-        )  # write 88200 (32 bit)
+            file.write(
+                wav_byte_rate.to_bytes(4, byteorder="little")
+            )  # write 88200 (32 bit)
 
-        file.write(wav_block_align.to_bytes(2, byteorder="little"))  # Write 4 (16 bit)
-        file.write(
-            wav_bps.to_bytes(2, byteorder="little")
-        )  # Write 16 Bits per sample (16 bit)
-        file.write(b"data")
-        file.write(
-            wav_data_size.to_bytes(4, byteorder="little")
-        )  # Write Size of actual audio...
-        file.write(wav_data)
+            file.write(wav_block_align.to_bytes(2, byteorder="little"))  # Write 4 (16 bit)
+            file.write(
+                wav_bps.to_bytes(2, byteorder="little")
+            )  # Write 16 Bits per sample (16 bit)
+            file.write(b"data")
+            file.write(
+                wav_data_size.to_bytes(4, byteorder="little")
+            )  # Write Size of actual audio...
+            file.write(wav_data)
 
 
 def main(input_dir, output_dir, args):
     """Main entry point of the app"""
     print("Starting File Convert")
-    # convert_file("11.ebl", "output/")
 
     if __debug_mode__:
         debug_mode()
 
-    validate_directories(input_dir, output_dir)
-    read_files(input_dir)
+    recursive_scan(input_dir)
+    #validate_directories(input_dir, output_dir)
+    #read_files(input_dir)
 
 
 if __name__ == "__main__":
@@ -245,6 +286,18 @@ if __name__ == "__main__":
     # --debug y/n
     parser.add_argument(
         "-d", "--debug", action="count", default=False, help="Debug <True|False>"
+    )
+
+    parser.add_argument(
+        "-p", "--preserve_filename", action="store_true", default=False, help="Preserve Original Filenames."
+    )
+
+    parser.add_argument(
+        "-n", "--no_write", action="store_true", default=False, help="Don't write to disk."
+    )
+
+    parser.add_argument(
+        "-e", "--error_save", action="store_true", default=False, help="Save errors to /errors/"
     )
 
     # --version output
