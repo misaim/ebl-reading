@@ -197,9 +197,11 @@ def convert_file(input_file: Path, output_dir: Path):
         wav_data = channel_2_data
     else:
         wav_data = b""
-        for i in range(0, channel_size, 2):
-            wav_data += channel_1_data[i : i + 2]
-            wav_data += channel_2_data[i : i + 2]
+        #for i in range(0, channel_size, 2):
+        #    wav_data += channel_1_data[i : i + 2]
+        #    wav_data += channel_2_data[i : i + 2]
+        wav_data = bytes((channel_1_data if (i&3)<2 else channel_2_data)[i-(i&2)-2*(i>>2)]
+               for i in range(2*len(channel_1_data)))
 
     # Size Blocks
     wav_data_size = channel_size * wav_channels
