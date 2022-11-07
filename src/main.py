@@ -9,7 +9,7 @@ __debug_mode__ = False
 
 import argparse
 from pathlib import Path
-from syslog import LOG_LOCAL0
+#from syslog import LOG_LOCAL0
 
 # TODO: import logging
 # this is currently BROKEN
@@ -25,7 +25,6 @@ def debug_mode(header: dict) -> None:
     print(f"Data Size Valid: {data_size_valid}, read {actual_data_size} bytes.")
 
     return None
-
 
 def recursive_scan(input_dir: Path) -> None:
     print(f"Scanning {input_dir.absolute()}/ ...", end='')
@@ -55,7 +54,7 @@ def recursive_scan(input_dir: Path) -> None:
             i = 1
             for file in directory_dict[key]:
                 input_file = Path(file['input_dir'], file['filename'])
-                output_file = Path(file['output_dir'], file['filename'])
+                #output_file = Path(file['output_dir'], file['filename'])
                 print(f"Converting file {i}/{number_files}", end='\r')
                 try:
                     convert_file(input_file, file['output_dir'])
@@ -65,7 +64,17 @@ def recursive_scan(input_dir: Path) -> None:
                     i += 1
             print(f"\nConverted {i} files.", end="\n")
     return None
-    
+
+def stereo_wav_byte_gen(a1, a2):
+    i1 = iter(a1)
+    i2 = iter(a2)
+    while True:
+        for it in i1, i1, i2, i2:
+            try:
+                yield next(it)
+            except StopIteration:
+                return
+
 def convert_file(input_file: Path, output_dir: Path):
     try:
         with open(input_file, mode="rb") as file:
@@ -172,9 +181,9 @@ def convert_file(input_file: Path, output_dir: Path):
             header_4_check = True if header_4_prefix == b"E5S1" else False
             data_size_valid = True if actual_data_size == (channel_size * 2) + 4 else False
     except:
-        print(f'Failed to read {input_file.name}')
+        print(f'READ ERROR: {input_file.name}')
         if vars(args)['error_save']:
-            Path(output_dir, "errors/", file['filename']).write_bytes(input_file.read_bytes())
+            Path(output_dir, "errors/", input_file.name).write_bytes(input_file.read_bytes())
 
     wav_header_length = 16
     wav_pcm_mode = 1
@@ -200,8 +209,9 @@ def convert_file(input_file: Path, output_dir: Path):
         #for i in range(0, channel_size, 2):
         #    wav_data += channel_1_data[i : i + 2]
         #    wav_data += channel_2_data[i : i + 2]
-        wav_data = bytes((channel_1_data if (i&3)<2 else channel_2_data)[i-(i&2)-2*(i>>2)]
-               for i in range(2*len(channel_1_data)))
+        #wav_data = bytes((channel_1_data if (i&3)<2 else channel_2_data)[i-(i&2)-2*(i>>2)]
+        #       for i in range(2*len(channel_1_data)))
+        wav_data = bytes(stereo_wav_byte_gen(channel_1_data, channel_2_data))
 
     # Size Blocks
     wav_data_size = channel_size * wav_channels
@@ -212,10 +222,25 @@ def convert_file(input_file: Path, output_dir: Path):
     else:
         try:
             if vars(args)['preserve_filename']:
-                xx = input_file.stem + '.wav'
+                output_file = input_file.stem + '.wav'
             else:
-                xx = file_name_1.replace("\x00", "") + ".wav"
-            with open(Path(output_dir, xx), mode="wb") as file:
+                output_file = file_name_1.replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
+                output_file = output_file.replace("\x22", "") # "
+                output_file = output_file.replace("\x5c", "") # \
+                output_file = output_file.replace("\x2f", "") # /
+                output_file = output_file.replace("\x2a", "") # *
+                output_file = output_file.replace("\x3e", "") # >
+                output_file = output_file.replace("\x3f", "") # ?
+                # Some more problem files (on large dataset...)
+                #.waved to write T.Bansuri B2
+                # Failed to write T.Bansuri C#4♦.wav
+                #Failed to write T.Bansuri F#4↕▼♠.wav
+                #Failed to write Bon Di L C#3   ↕.wav
+                #Failed to write Bon Di L D#3   →.wav
+                #Failed to write Bon Di L E3#2 §☼.wav
+                #Failed to write Bon Di L A#4   §.wav
+                output_file = output_file + ".wav"
+            with open(Path(output_dir, output_file), mode="wb") as file:
                 file.write(b"RIFF")
                 file.write(wav_file_size.to_bytes(4, byteorder="little"))
                 file.write(b"WAVE")
@@ -245,7 +270,7 @@ def convert_file(input_file: Path, output_dir: Path):
                 )  # Write Size of actual audio...
                 file.write(wav_data)
         except:
-            print(f"Failed to write {xx}")
+            print(f"Failed to write {output_file}")
 
 
 def main(input_dir, output_dir, args):
