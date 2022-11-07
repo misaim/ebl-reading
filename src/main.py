@@ -201,6 +201,11 @@ def convert_file(input_file: Path, output_dir: Path):
         wav_channels * wav_bps * (1 / 8)
     )  #  NumChannels * BitsPerSample/8
 
+    wav_channels_test = 1 if variable_4 == variable_5 else 2
+    print("Testing Channels: " + str(wav_channels_test))
+    if variable_4 == variable_5:
+        print('MONO DETECTED???')
+
     # Actual File Data
     if wav_channels == 1:
         wav_data = channel_2_data
