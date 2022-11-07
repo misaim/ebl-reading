@@ -1,20 +1,23 @@
 # EBL to WAV Converion Script
 The following is a rudimentary script to convert propritary E-mu EBL files into a usable audio format - WAV.
 
-Code mostly works - I've tested on a large number of files, with only a few problems. I'll collect all of those and build a test suite.
+Currently:
+ - PASS: 19499 Files, 3.16 gb (11 Folders)
+ - FAIL: 23683 Files, 4.04 gb (1 Folder "Soundbanks") - Belive these are Mono, which is currently unsuported. 
 
 ## Dependancies
 Python 3.9+
 
 ## Usage
-Reads EXB folders in "input" folder. Writes to output. Need to add usage flags but i'm lazy. Structure looks like the following:
+Reads either a directory or individual file, and writes to specified output directory.
 
-    Sample.exb/
-      Sample.exb
-      SamplePool/
-        Sample1.ebl
-        Sample1.ebl
-        etc...
+Directorys are recursivly scanned, with all ebl files proccessed and file structure retained in output dir.
+
+Options:
+ - -d: Debug - Currently not working.
+ - -p: Preserve Filename. Keeps original EBL filename, instead of the metadata encoded filename from Emulator X-3
+ - -n: No-Write. Doesn't write anything to disk. Useful for verification of reads.
+ - -e: Error Save. Writes files which can't be read to /output/errors/.
         
 ## EM-U and Emulator X-3
 E-mu *was* a software sampler from 1997. They released a number of Sample CD's, containing many small audio files intended to be used with a sampler to make music.
@@ -40,6 +43,16 @@ We can make assumptions for other variables:
 - Number of Channels: 2 (For stereo audio). All EBL files I've come across have been stereo, but Mono files are possible. Currently we assume Stereo (2).
 - BitsPerSample: 16. The classic CD quality BPS. There is probably a way to read this from an EBL, but I currently assume it's 16.
 
+## EXB "Files"
+Standard "EXB" file structure looks like the following:
+
+    Sample.exb/
+      Sample.exb
+      SamplePool/
+        Sample1.ebl
+        Sample1.ebl
+        etc...
+        
 ## EBL Files
 The following is my notes from reading a few dozen EBL files.
 
