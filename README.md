@@ -96,8 +96,10 @@ EBL files are weird - the headers are mostly Big Endian byte order, although the
 
 - variable_10. Frequency. Typically 44100 (hz)
 - variable_11. Always 0.
-- variable_12. Unknown but maybe number of channels, bitrate and some other things go here.
-- data_header_padding. 72 Bytes of 0.
+- variable_12. Unknown but maybe number of channels, bitrate and some other things go here. 
+
+- data_description. 64 bytes, UTF-8 encoded string.
+- data_unknown. 8 bytes.
 
 ### Data (Remaining Bytes)
 Audio data appears to be 16bit audio, however the format is different from a wav.
