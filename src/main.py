@@ -76,8 +76,6 @@ def stereo_wav_byte_gen(a1, a2):
             except StopIteration:
                 return
 
-
-
 def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
     try:
         with open(input_file, mode="rb") as file:
@@ -158,11 +156,6 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
 
             data_header_padding = file.read(72)
 
-            #if (variable_4 == variable_5): # AKA We think it's a mono file...
-            channel_size = (
-                variable_3 - variable_2 - 4
-            )
-
             channel_1_size = (
                 variable_4 - 186
             )  # How much data is in each channel? We minus 4 to avoid the empty byte.
@@ -170,29 +163,17 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
             channel_2_size = (
                 variable_5 - variable_4 - 4
             )
+
             channel_2_size = 0 if channel_2_size == -4 else channel_2_size
-            #print(f"\n {input_file.name}\nOld Channel Size: {channel_size}, New 1: {channel_1_size}, New 2: {channel_2_size}\n")
 
             actual_header_size = file.tell()
             actual_data_size = actual_file_size - actual_header_size
-
-            
 
             channel_1_data = file.read(channel_1_size)
             data_padding = int.from_bytes(
                 byte := file.read(4), "little"
             )  # Should be zeros all the time. LOL
             channel_2_data = file.read(channel_2_size)
-
-            # print(f"Read file {input_file} - {actual_file_size} Bytes.")
-            # print(f"Read {actual_header_size} bytes as header.")
-            # print(f"Channel size: {channel_size} bytes.")
-
-
-            #print(f"\n ACTUAL HEADER: {actual_header_size}, REMAINING FILE SIZE: {actual_data_size}")
-            #print(f"")
-            #print(f"ACTUAL FILE SIZE: {actual_file_size}, BYTES READ: {file.tell()}")
-            #file.tell()
 
             header_1_check = True if header_1_prefix == b"FORM" else False
             header_1_valid = (
@@ -201,7 +182,7 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
             header_2_check = True if header_2_prefix == b"E5B0TOC2" else False
             header_3_check = True if header_3_prefix == b"E5S1" else False
             header_4_check = True if header_4_prefix == b"E5S1" else False
-            data_size_valid = True if actual_data_size == (channel_size * 2) + 4 else False
+            #data_size_valid = True if actual_data_size == (channel_size * 2) + 4 else False
     except:
         print(f'READ ERROR: {input_file.name}')
         if vars(args)['error_save']:
@@ -214,9 +195,10 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
         wav_sample_rate = variable_10
         wav_channels = 2
         wav_bps = 16  # No idea from where lol
-
-        wav_channels = 1 if channel_2_size == 0 else 2
+        
         # Calculated Variables
+        wav_channels = 1 if channel_2_size == 0 else 2
+
         wav_byte_rate = int(
             wav_sample_rate * wav_channels * wav_bps * (1 / 8)
         )  # SampleRate * NumChannels * BitsPerSample/8
@@ -224,25 +206,13 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
             wav_channels * wav_bps * (1 / 8)
         )  #  NumChannels * BitsPerSample/8
 
-        #wav_channels_test = 1 if variable_4 == variable_5 else 2
-        #print("Testing Channels: " + str(wav_channels))
-        #if variable_4 == variable_5:
-        #    print('MONO DETECTED???')
-
         # Actual File Data
         if wav_channels == 1:
             wav_data = channel_1_data
         else:
-            wav_data = b""
-            #for i in range(0, channel_size, 2):
-            #    wav_data += channel_1_data[i : i + 2]
-            #    wav_data += channel_2_data[i : i + 2]
-            #wav_data = bytes((channel_1_data if (i&3)<2 else channel_2_data)[i-(i&2)-2*(i>>2)]
-            #       for i in range(2*len(channel_1_data)))
             wav_data = bytes(stereo_wav_byte_gen(channel_1_data, channel_2_data))
 
         # Size Blocks
-        #wav_data_size = channel_size * wav_channels
         wav_data_size = channel_1_size + channel_2_size
         wav_file_size = wav_data_size + 36
 
@@ -254,13 +224,13 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
                     output_file = input_file.stem + '.wav'
                 else:
                     output_file = file_name_1.replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
-                    output_file = re.sub('[^A-Za-z0-9 #-_]+', '', output_file)
-                    #output_file = output_file.replace("\x22", "") # "
-                    #output_file = output_file.replace("\x5c", "") # \
-                    #output_file = output_file.replace("\x2f", "") # /
-                    #output_file = output_file.replace("\x2a", "") # *
-                    #output_file = output_file.replace("\x3e", "") # >
-                    #output_file = output_file.replace("\x3f", "") # ?
+                    #output_file = re.sub('[^A-Za-z0-9 #-_]+', '', output_file) # This Doesn't work.
+                    output_file = output_file.replace("\x22", "") # "
+                    output_file = output_file.replace("\x5c", "") # \
+                    output_file = output_file.replace("\x2f", "") # /
+                    output_file = output_file.replace("\x2a", "") # *
+                    output_file = output_file.replace("\x3e", "") # >
+                    output_file = output_file.replace("\x3f", "") # ?
                     # Some more problem files (on large dataset...)
                     #.waved to write T.Bansuri B2
                     # Failed to write T.Bansuri C#4♦.wav
