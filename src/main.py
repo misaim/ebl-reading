@@ -80,134 +80,79 @@ def read_ebl_file(input_file: Path, error_dir: Path):
     file = {"filename": input_file.name, "path": input_file, "read": 0, "size": 0}
     with open(input_file, mode="rb") as file_reader:
         file_reader.seek(0, 2)
-        #actual_file_size = file_reader.tell()
         file['size'] = file_reader.tell()
         file_reader.seek(0, 0)
 
         # Preliminary File Header is 8 bytes.
-        #header_1_prefix = (byte := file_reader.read(4))  # "FORM"
-        #header_1_filesize = int.from_bytes(
-        #    byte := file_reader.read(4), "big"
-        #)  # FileSize - 8 (i.e how many bytes are left)
-        #header_1_read = file_reader.tell()
         file['header_1'] = {
-                                "prefix": (byte := file_reader.read(4)),
-                                "filesize": int.from_bytes(byte := file_reader.read(4), "big"), 
+                                "prefix": (byte := file_reader.read(4)), # "FORM"
+                                "filesize": int.from_bytes(byte := file_reader.read(4), "big"), # FileSize - 8 (i.e how many bytes are left)
                                 "size": file_reader.tell()
                             }
         file['read'] = file_reader.tell()
 
         # Header 2 just contains a size of metadata field. 12 bytes.
-        #header_2_prefix = (byte := file_reader.read(8))  # "E5B0TOC2"
-        #header_2_data = int.from_bytes(
-        #    byte := file_reader.read(4), "big"
-        #)  # Length of the next Chunk. 78.
-        #header_2_read = file_reader.tell()
         file['header_2'] = {
-                                "prefix": (byte := file_reader.read(8)),
-                                "next_header_bytes": int.from_bytes(byte := file_reader.read(4), "big"), # Unsure of this.
+                                "prefix": (byte := file_reader.read(8)),  # "E5B0TOC2"
+                                "next_header_bytes": int.from_bytes(byte := file_reader.read(4), "big"), # Length of the next Chunk??? 78.
                                 "read": file_reader.tell()# - file['read']
                             }
         file['read'] = file_reader.tell()
 
-
         # Header 3 just contains the filename, and an updated metadata size and filesize for something different. 78 bytes (From header_2_data)
-        #header_3_prefix = (byte := file_reader.read(4))  # "E5S1"
-        #header_3_filesize = int.from_bytes(
-        #    byte := file_reader.read(4), "big"
-        #)  # 343480. The Size after "header_4_data" below, i.e byte >= 108
-        #header_3_data = int.from_bytes(byte := file_reader.read(4), "big"),  # ??? 98
-        #file_reader.read(2)  # 0's here. No idea why.
-        #file_name_1 = (byte := file_reader.read(64)).decode(
-        #    "utf-8"
-        #)  # The following 64 bytes are the track name, more or less encoded utf-8.
-        #header_3_read = file_reader.tell()
         file['header_3'] = {
-                                "prefix": (byte := file_reader.read(4)),
-                                "data_size": int.from_bytes(byte := file_reader.read(4), "big"),
+                                "prefix": (byte := file_reader.read(4)), # "E5S1"
+                                "data_size": int.from_bytes(byte := file_reader.read(4), "big"), # 343480. The Size after "header_4_data" below, i.e byte >= 108
                                 "data": int.from_bytes(byte := file_reader.read(4), "big"),  # ??? 98
-                                "zeros": file_reader.read(2),
-                                "filename": (byte := file_reader.read(64)).decode("utf-8"),
+                                "zeros": file_reader.read(2), # 0's here. No idea why.
+                                "filename": (byte := file_reader.read(64)).decode("utf-8"), # The following 64 bytes are the track name, more or less encoded utf-8.
                                 "read": file_reader.tell()
                             }
         file['read'] = file_reader.tell()
 
-        
         # Another E5S1 header. 14 bytes. No idea why.
-        #header_4_prefix = (byte := file_reader.read(4))  # "E5S1"
-        #header_4_filesize = int.from_bytes(byte := file_reader.read(4), "big")  # 343482
-        #header_4_data = (byte := file_reader.read(6))  # 256 be, 1 le
-        #header_4_read = file_reader.tell()
         file['header_4'] = {
-                                'prefix': (byte := file_reader.read(4)),
-                                'size': int.from_bytes(byte := file_reader.read(4), "big"),
-                                'data': (byte := file_reader.read(6)),
+                                'prefix': (byte := file_reader.read(4)),  # "E5S1"
+                                'size': int.from_bytes(byte := file_reader.read(4), "big"), # 343482
+                                'data': (byte := file_reader.read(6)), # 256 be, 1 le
                                 'read': file_reader.tell()
                             }
         file['read'] = file_reader.tell()
 
-
         # Start of Data Chunk 2? 184 bytes to go till start of file_reader.
-        #file_name_2 = (byte := file_reader.read(64))  # The file name repeated. 64 bytes.
         # Need to read this properly... Unknown if static sizes.
-        #variable_1 = int.from_bytes(byte := file_reader.read(4), "little")  # Unknown. 301 le
-
-        #variable_2 = int.from_bytes(byte := file_reader.read(4), "little")  # Data Offset. 184 le
-        #variable_3 = int.from_bytes(byte := file_reader.read(4), "little")  # Data size (including offset). 171832 le. Aka channel 1 is 171832-184 = 171648 bytes.
-        #variable_4 = int.from_bytes(byte := file_reader.read(4), "little")  # Data size - 2 (Not sure why?). 171830
-        #variable_5 = int.from_bytes(byte := file_reader.read(4), "little")  # Close to the end of file_reader. 343478.
-
-        #variable_6 = int.from_bytes(byte := file_reader.read(4), "little")  # Chanel 1 Data Offset. 184.
-        #variable_7 = int.from_bytes(byte := file_reader.read(4), "little")  # Data size (including offset). 171832
-        #variable_8 = int.from_bytes(byte := file_reader.read(4), "little")  # 184. Start of Audio Data?
-        #variable_9 = int.from_bytes(byte := file_reader.read(4), "little")  # 171832. End of data for this channel?
-
-        #variable_10 = int.from_bytes(byte := file_reader.read(4), "little")  # Frequency. Typically 44100 (hz)
-        #variable_11 = int.from_bytes(byte := file_reader.read(4), "little")  # 0. Unknown.
-        #variable_12 = int.from_bytes(byte := file_reader.read(4), "little")  # Unknown but maybe number of channels, bitrate idk.
-
-        #data_header_padding = file_reader.read(72)
         file['header_data'] = {
-                                'filename': (byte := file_reader.read(64)),
-                                'v1': int.from_bytes(byte := file_reader.read(4), "little"),
-                                'v2': int.from_bytes(byte := file_reader.read(4), "little"),  # Data Offset. 184 le,
-                                'v3': int.from_bytes(byte := file_reader.read(4), "little"),
-                                'v4': int.from_bytes(byte := file_reader.read(4), "little"), #used
-                                'v5': int.from_bytes(byte := file_reader.read(4), "little"), #used
-                                'v6': int.from_bytes(byte := file_reader.read(4), "little"),
-                                'v7': int.from_bytes(byte := file_reader.read(4), "little"),
-                                'v8': int.from_bytes(byte := file_reader.read(4), "little"),
-                                'v9': int.from_bytes(byte := file_reader.read(4), "little"),
-                                'v10': int.from_bytes(byte := file_reader.read(4), "little"), #used
-                                'v11': int.from_bytes(byte := file_reader.read(4), "little"),
-                                'v12': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'filename': (byte := file_reader.read(64)), # The file name repeated. 64 bytes.
+                                'v1': int.from_bytes(byte := file_reader.read(4), "little"), # Unknown. 301 le
+                                'v2': int.from_bytes(byte := file_reader.read(4), "little"), # Data Offset. 184 le,
+                                'v3': int.from_bytes(byte := file_reader.read(4), "little"), # Data size (including offset). 171832 le. Aka channel 1 is 171832-184 = 171648 bytes.
+                                'v4': int.from_bytes(byte := file_reader.read(4), "little"), # Data size - 2 (Not sure why?). 171830
+                                'v5': int.from_bytes(byte := file_reader.read(4), "little"), # Close to the end of file_reader. 343478.
+                                'v6': int.from_bytes(byte := file_reader.read(4), "little"), # Chanel 1 Data Offset. 184.
+                                'v7': int.from_bytes(byte := file_reader.read(4), "little"), # Data size (including offset). 171832
+                                'v8': int.from_bytes(byte := file_reader.read(4), "little"), # 184. Start of Audio Data?
+                                'v9': int.from_bytes(byte := file_reader.read(4), "little"), # 171832. End of data for this channel?
+                                'v10': int.from_bytes(byte := file_reader.read(4), "little"),# Frequency. Typically 44100 (hz)
+                                'v11': int.from_bytes(byte := file_reader.read(4), "little"),# 0. Unknown.
+                                'v12': int.from_bytes(byte := file_reader.read(4), "little"),# Unknown but maybe number of channels, bitrate idk.
                                 'padding': file_reader.read(72),
                                 'read': file_reader.tell()
         }
         file['read'] = file_reader.tell()
         file['header_read'] = file['read']
-        #channel_1_size = (
-        #    file['header_data']['v4'] - 186
-        #)  # How much data is in each channel? We minus 4 to avoid the empty byte.
-        file['channel_1_size'] = (file['header_data']['v4'] - 186)
 
-        #channel_2_size = (
-        #    file['header_data']['v5'] - file['header_data']['v4'] - 4
-        #)
+        # How much data is in each channel? We minus 4 to avoid the empty byte.
+        file['channel_1_size'] = (file['header_data']['v4'] - 186)
         file['channel_2_size'] = (file['header_data']['v5'] - file['header_data']['v4'] - 4)
 
         file['channel_2_size'] = 0 if file['channel_2_size'] == -4 else file['channel_2_size']
+        
         file['data_size'] = file['size'] - file['header_read']
 
-        
-        #channel_1_data = file_reader.read(file['channel_1_size'])
         file['channel_1_data'] = file_reader.read(file['channel_1_size'])
-
         data_padding = int.from_bytes(
             byte := file_reader.read(4), "little"
         )  # Should be zeros all the time. LOL
-
-        #channel_2_data = file_reader.read(file['channel_2_size'])
         file['channel_2_data'] = file_reader.read(file['channel_2_size'])
 
         #header_1_check = True if file['header_1']['prefix'] == b"FORM" else False
