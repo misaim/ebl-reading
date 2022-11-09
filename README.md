@@ -2,8 +2,9 @@
 The following is a rudimentary script to convert propritary E-mu EBL files into a usable audio format - WAV.
 
 Currently:
- - PASS: 19499 Files, 3.16 gb (11 Folders)
- - FAIL: 23683 Files, 4.04 gb (1 Folder "Soundbanks") - Belive these are Mono, which is currently unsuported. 
+ - PASS: 41925 Files
+ - FAIL: 51 ish Files
+ - VERIFIED: :) 
 
 ## Dependancies
 Python 3.9+
@@ -36,11 +37,11 @@ In order to write a WAV file, several variables are required to be read from eac
 - The data size on disk (in bytes). Taken from EBL file header.
 - Sample Rate. Taken from EBL file header, although typically 44100 (CD quality)
 - The filename - encoded as a 64 byte string.
+- Number of Channels - Taken from channel size equations. 
 
 We can make assumptions for other variables:
 
 - PCM Mode: Typically 1, for every WAV file ever.
-- Number of Channels: 2 (For stereo audio). All EBL files I've come across have been stereo, but Mono files are possible. Currently we assume Stereo (2).
 - BitsPerSample: 16. The classic CD quality BPS. There is probably a way to read this from an EBL, but I currently assume it's 16.
 
 ## EXB "Files"
@@ -96,8 +97,10 @@ EBL files are weird - the headers are mostly Big Endian byte order, although the
 
 - variable_10. Frequency. Typically 44100 (hz)
 - variable_11. Always 0.
-- variable_12. Unknown but maybe number of channels, bitrate and some other things go here.
-- data_header_padding. 72 Bytes of 0.
+- variable_12. Unknown but maybe number of channels, bitrate and some other things go here. 
+
+- data_description. 64 bytes, UTF-8 encoded string.
+- data_unknown. 8 bytes.
 
 ### Data (Remaining Bytes)
 Audio data appears to be 16bit audio, however the format is different from a wav.
@@ -117,4 +120,9 @@ EBL Files take a different tact, splitting Left and Right into continuous chunks
     RRRR RRRR
     ...
 
-Sizes of each chunk are taken from variable_3 - variable_2.
+Mono Tracks contain a single block of data, with the same header:
+
+    LLLL LLLL
+    LLLL LLLL
+    ...
+
