@@ -76,115 +76,156 @@ def stereo_wav_byte_gen(a1, a2):
             except StopIteration:
                 return
 
+def read_ebl_file(input_file: Path, error_dir: Path):
+    file = {"filename": input_file.name, "path": input_file, "read": 0, "size": 0}
+    with open(input_file, mode="rb") as file_reader:
+        file_reader.seek(0, 2)
+        #actual_file_size = file_reader.tell()
+        file['size'] = file_reader.tell()
+        file_reader.seek(0, 0)
+
+        # Preliminary File Header is 8 bytes.
+        #header_1_prefix = (byte := file_reader.read(4))  # "FORM"
+        #header_1_filesize = int.from_bytes(
+        #    byte := file_reader.read(4), "big"
+        #)  # FileSize - 8 (i.e how many bytes are left)
+        #header_1_read = file_reader.tell()
+        file['header_1'] = {
+                                "prefix": (byte := file_reader.read(4)),
+                                "filesize": int.from_bytes(byte := file_reader.read(4), "big"), 
+                                "size": file_reader.tell()
+                            }
+        file['read'] = file_reader.tell()
+
+        # Header 2 just contains a size of metadata field. 12 bytes.
+        #header_2_prefix = (byte := file_reader.read(8))  # "E5B0TOC2"
+        #header_2_data = int.from_bytes(
+        #    byte := file_reader.read(4), "big"
+        #)  # Length of the next Chunk. 78.
+        #header_2_read = file_reader.tell()
+        file['header_2'] = {
+                                "prefix": (byte := file_reader.read(8)),
+                                "next_header_bytes": int.from_bytes(byte := file_reader.read(4), "big"), # Unsure of this.
+                                "read": file_reader.tell()# - file['read']
+                            }
+        file['read'] = file_reader.tell()
+
+
+        # Header 3 just contains the filename, and an updated metadata size and filesize for something different. 78 bytes (From header_2_data)
+        #header_3_prefix = (byte := file_reader.read(4))  # "E5S1"
+        #header_3_filesize = int.from_bytes(
+        #    byte := file_reader.read(4), "big"
+        #)  # 343480. The Size after "header_4_data" below, i.e byte >= 108
+        #header_3_data = int.from_bytes(byte := file_reader.read(4), "big"),  # ??? 98
+        #file_reader.read(2)  # 0's here. No idea why.
+        #file_name_1 = (byte := file_reader.read(64)).decode(
+        #    "utf-8"
+        #)  # The following 64 bytes are the track name, more or less encoded utf-8.
+        #header_3_read = file_reader.tell()
+        file['header_3'] = {
+                                "prefix": (byte := file_reader.read(4)),
+                                "data_size": int.from_bytes(byte := file_reader.read(4), "big"),
+                                "data": int.from_bytes(byte := file_reader.read(4), "big"),  # ??? 98
+                                "zeros": file_reader.read(2),
+                                "filename": (byte := file_reader.read(64)).decode("utf-8"),
+                                "read": file_reader.tell()
+                            }
+        file['read'] = file_reader.tell()
+
+        
+        # Another E5S1 header. 14 bytes. No idea why.
+        #header_4_prefix = (byte := file_reader.read(4))  # "E5S1"
+        #header_4_filesize = int.from_bytes(byte := file_reader.read(4), "big")  # 343482
+        #header_4_data = (byte := file_reader.read(6))  # 256 be, 1 le
+        #header_4_read = file_reader.tell()
+        file['header_4'] = {
+                                'prefix': (byte := file_reader.read(4)),
+                                'size': int.from_bytes(byte := file_reader.read(4), "big"),
+                                'data': (byte := file_reader.read(6)),
+                                'read': file_reader.tell()
+                            }
+        file['read'] = file_reader.tell()
+
+
+        # Start of Data Chunk 2? 184 bytes to go till start of file_reader.
+        #file_name_2 = (byte := file_reader.read(64))  # The file name repeated. 64 bytes.
+        # Need to read this properly... Unknown if static sizes.
+        #variable_1 = int.from_bytes(byte := file_reader.read(4), "little")  # Unknown. 301 le
+
+        #variable_2 = int.from_bytes(byte := file_reader.read(4), "little")  # Data Offset. 184 le
+        #variable_3 = int.from_bytes(byte := file_reader.read(4), "little")  # Data size (including offset). 171832 le. Aka channel 1 is 171832-184 = 171648 bytes.
+        #variable_4 = int.from_bytes(byte := file_reader.read(4), "little")  # Data size - 2 (Not sure why?). 171830
+        #variable_5 = int.from_bytes(byte := file_reader.read(4), "little")  # Close to the end of file_reader. 343478.
+
+        #variable_6 = int.from_bytes(byte := file_reader.read(4), "little")  # Chanel 1 Data Offset. 184.
+        #variable_7 = int.from_bytes(byte := file_reader.read(4), "little")  # Data size (including offset). 171832
+        #variable_8 = int.from_bytes(byte := file_reader.read(4), "little")  # 184. Start of Audio Data?
+        #variable_9 = int.from_bytes(byte := file_reader.read(4), "little")  # 171832. End of data for this channel?
+
+        #variable_10 = int.from_bytes(byte := file_reader.read(4), "little")  # Frequency. Typically 44100 (hz)
+        #variable_11 = int.from_bytes(byte := file_reader.read(4), "little")  # 0. Unknown.
+        #variable_12 = int.from_bytes(byte := file_reader.read(4), "little")  # Unknown but maybe number of channels, bitrate idk.
+
+        #data_header_padding = file_reader.read(72)
+        file['header_data'] = {
+                                'filename': (byte := file_reader.read(64)),
+                                'v1': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'v2': int.from_bytes(byte := file_reader.read(4), "little"),  # Data Offset. 184 le,
+                                'v3': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'v4': int.from_bytes(byte := file_reader.read(4), "little"), #used
+                                'v5': int.from_bytes(byte := file_reader.read(4), "little"), #used
+                                'v6': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'v7': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'v8': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'v9': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'v10': int.from_bytes(byte := file_reader.read(4), "little"), #used
+                                'v11': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'v12': int.from_bytes(byte := file_reader.read(4), "little"),
+                                'padding': file_reader.read(72),
+                                'read': file_reader.tell()
+        }
+        file['read'] = file_reader.tell()
+        file['header_read'] = file['read']
+        #channel_1_size = (
+        #    file['header_data']['v4'] - 186
+        #)  # How much data is in each channel? We minus 4 to avoid the empty byte.
+        file['channel_1_size'] = (file['header_data']['v4'] - 186)
+
+        #channel_2_size = (
+        #    file['header_data']['v5'] - file['header_data']['v4'] - 4
+        #)
+        file['channel_2_size'] = (file['header_data']['v5'] - file['header_data']['v4'] - 4)
+
+        file['channel_2_size'] = 0 if file['channel_2_size'] == -4 else file['channel_2_size']
+        file['data_size'] = file['size'] - file['header_read']
+
+        
+        #channel_1_data = file_reader.read(file['channel_1_size'])
+        file['channel_1_data'] = file_reader.read(file['channel_1_size'])
+
+        data_padding = int.from_bytes(
+            byte := file_reader.read(4), "little"
+        )  # Should be zeros all the time. LOL
+
+        #channel_2_data = file_reader.read(file['channel_2_size'])
+        file['channel_2_data'] = file_reader.read(file['channel_2_size'])
+
+        #header_1_check = True if file['header_1']['prefix'] == b"FORM" else False
+        #header_1_valid = (
+        #    True if file['header_1']['filesize'] == file['size'] - file['header_1']['size'] else False
+        #)  # Checks if the remaining bytes in header 1 is correct.
+        #header_2_check = True if file['header_2']['prefix'] == b"E5B0TOC2" else False
+        #header_3_check = True if file['header_2']['prefix'] == b"E5S1" else False
+        #header_4_check = True if file['header_4']['prefix'] == b"E5S1" else False
+        #data_size_valid = True if file['data_size'] == (channel_size * 2) + 4 else False
+    return file
+
+
 def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
     try:
-        with open(input_file, mode="rb") as file:
-            file.seek(0, 2)
-            actual_file_size = file.tell()
-            file.seek(0, 0)
-
-            # Preliminary File Header is 8 bytes.
-            header_1_prefix = (byte := file.read(4))  # "FORM"
-            header_1_filesize = int.from_bytes(
-                byte := file.read(4), "big"
-            )  # FileSize - 8 (i.e how many bytes are left)
-            header_1_read = file.tell()
-
-            # Header 2 just contains a size of metadata field. 12 bytes.
-            header_2_prefix = (byte := file.read(8))  # "E5B0TOC2"
-            header_2_data = int.from_bytes(
-                byte := file.read(4), "big"
-            )  # Length of the next Chunk. 78.
-            header_2_read = file.tell()
-
-            # Header 3 just contains the filename, and an updated metadata size and filesize for something different. 78 bytes (From header_2_data)
-            header_3_prefix = (byte := file.read(4))  # "E5S1"
-            header_3_filesize = int.from_bytes(
-                byte := file.read(4), "big"
-            )  # 343480. The Size after "header_4_data" below, i.e byte >= 108
-            header_3_data = int.from_bytes(byte := file.read(4), "big")  # ??? 98.
-            file.read(2)  # 0's here. No idea why.
-            file_name_1 = (byte := file.read(64)).decode(
-                "utf-8"
-            )  # The following 64 bytes are the track name, more or less encoded utf-8.
-            header_3_read = file.tell()
-
-            # Another E5S1 header. 14 bytes. No idea why.
-            header_4_prefix = (byte := file.read(4))  # "E5S1"
-            header_4_filesize = int.from_bytes(byte := file.read(4), "big")  # 343482
-            header_4_data = (byte := file.read(6))  # 256 be, 1 le
-            header_4_read = file.tell()
-
-            # Start of Data Chunk 2? 184 bytes to go till start of file.
-            file_name_2 = (byte := file.read(64))  # The file name repeated. 64 bytes.
-            # Need to read this properly... Unknown if static sizes.
-            variable_1 = int.from_bytes(byte := file.read(4), "little")  # Unknown. 301 le
-
-            variable_2 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Data Offset. 184 le
-            variable_3 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Data size (including offset). 171832 le. Aka channel 1 is 171832-184 = 171648 bytes.
-            variable_4 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Data size - 2 (Not sure why?). 171830
-            variable_5 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Close to the end of file. 343478.
-
-            variable_6 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Chanel 1 Data Offset. 184.
-            variable_7 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Data size (including offset). 171832
-            variable_8 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # 184. Start of Audio Data?
-            variable_9 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # 171832. End of data for this channel?
-
-            variable_10 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Frequency. Typically 44100 (hz)
-            variable_11 = int.from_bytes(byte := file.read(4), "little")  # 0. Unknown.
-            variable_12 = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Unknown but maybe number of channels, bitrate idk.
-
-            data_header_padding = file.read(72)
-
-            channel_1_size = (
-                variable_4 - 186
-            )  # How much data is in each channel? We minus 4 to avoid the empty byte.
-
-            channel_2_size = (
-                variable_5 - variable_4 - 4
-            )
-
-            channel_2_size = 0 if channel_2_size == -4 else channel_2_size
-
-            actual_header_size = file.tell()
-            actual_data_size = actual_file_size - actual_header_size
-
-            channel_1_data = file.read(channel_1_size)
-            data_padding = int.from_bytes(
-                byte := file.read(4), "little"
-            )  # Should be zeros all the time. LOL
-            channel_2_data = file.read(channel_2_size)
-
-            header_1_check = True if header_1_prefix == b"FORM" else False
-            header_1_valid = (
-                True if header_1_filesize == actual_file_size - header_1_read else False
-            )  # Checks if the remaining bytes in header 1 is correct.
-            header_2_check = True if header_2_prefix == b"E5B0TOC2" else False
-            header_3_check = True if header_3_prefix == b"E5S1" else False
-            header_4_check = True if header_4_prefix == b"E5S1" else False
-            #data_size_valid = True if actual_data_size == (channel_size * 2) + 4 else False
+        ebl_file = read_ebl_file(input_file, error_dir)
     except:
-        print(f'READ ERROR: {input_file.name}')
+        print(f'EBL READ ERROR: {input_file.name}')
         if vars(args)['error_save']:
             Path(error_dir, input_file.name).write_bytes(input_file.read_bytes())
     else:
@@ -192,12 +233,12 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
         wav_pcm_mode = 1
 
         # Imported Variables:
-        wav_sample_rate = variable_10
+        wav_sample_rate = ebl_file['header_data']['v10']
         wav_channels = 2
         wav_bps = 16  # No idea from where lol
         
         # Calculated Variables
-        wav_channels = 1 if channel_2_size == 0 else 2
+        wav_channels = 1 if ebl_file['channel_2_size'] == 0 else 2
 
         wav_byte_rate = int(
             wav_sample_rate * wav_channels * wav_bps * (1 / 8)
@@ -208,12 +249,12 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
 
         # Actual File Data
         if wav_channels == 1:
-            wav_data = channel_1_data
+            wav_data = ebl_file['channel_1_data']
         else:
-            wav_data = bytes(stereo_wav_byte_gen(channel_1_data, channel_2_data))
+            wav_data = bytes(stereo_wav_byte_gen(ebl_file['channel_1_data'], ebl_file['channel_2_data']))
 
         # Size Blocks
-        wav_data_size = channel_1_size + channel_2_size
+        wav_data_size = ebl_file['channel_1_size'] + ebl_file['channel_2_size']
         wav_file_size = wav_data_size + 36
 
         if vars(args)['no_write']:
@@ -223,7 +264,7 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
                 if vars(args)['preserve_filename']:
                     output_file = input_file.stem + '.wav'
                 else:
-                    output_file = file_name_1.replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
+                    output_file = ebl_file['header_3']['filename'].replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
                     #output_file = re.sub('[^A-Za-z0-9 #-_]+', '', output_file) # This Doesn't work.
                     output_file = output_file.replace("\x22", "") # "
                     output_file = output_file.replace("\x5c", "") # \
@@ -240,37 +281,38 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
                     #Failed to write Bon Di L E3#2 §☼.wav
                     #Failed to write Bon Di L A#4   §.wav
                     output_file = output_file + ".wav"
-                with open(Path(output_dir, output_file), mode="wb") as file:
-                    file.write(b"RIFF")
-                    file.write(wav_file_size.to_bytes(4, byteorder="little"))
-                    file.write(b"WAVE")
-                    file.write(b"fmt ")
-                    file.write(
+                with open(Path(output_dir, output_file), mode="wb") as file_writer:
+                    file_writer.write(b"RIFF")
+                    file_writer.write(wav_file_size.to_bytes(4, byteorder="little"))
+                    file_writer.write(b"WAVE")
+                    file_writer.write(b"fmt ")
+                    file_writer.write(
                         wav_header_length.to_bytes(4, byteorder="little")
                     )  # Write 16 (header length 32 bit)
-                    file.write(wav_pcm_mode.to_bytes(2, byteorder="little"))  # Write 1 (16 bit)
-                    file.write(
+                    file_writer.write(wav_pcm_mode.to_bytes(2, byteorder="little"))  # Write 1 (16 bit)
+                    file_writer.write(
                         wav_channels.to_bytes(2, byteorder="little")
                     )  # Write # channels (16 bit)
-                    file.write(
+                    file_writer.write(
                         wav_sample_rate.to_bytes(4, byteorder="little")
                     )  # Write Sample Rate, 32 bit int
 
-                    file.write(
+                    file_writer.write(
                         wav_byte_rate.to_bytes(4, byteorder="little")
                     )  # write 88200 (32 bit)
 
-                    file.write(wav_block_align.to_bytes(2, byteorder="little"))  # Write 4 (16 bit)
-                    file.write(
+                    file_writer.write(wav_block_align.to_bytes(2, byteorder="little"))  # Write 4 (16 bit)
+                    file_writer.write(
                         wav_bps.to_bytes(2, byteorder="little")
                     )  # Write 16 Bits per sample (16 bit)
-                    file.write(b"data")
-                    file.write(
+                    file_writer.write(b"data")
+                    file_writer.write(
                         wav_data_size.to_bytes(4, byteorder="little")
                     )  # Write Size of actual audio...
-                    file.write(wav_data)
+                    file_writer.write(wav_data)
             except:
                 print(f"Failed to write {output_file}")
+
 
 
 def main(input_dir, output_dir, args):
