@@ -165,6 +165,91 @@ def read_ebl_file(input_file: Path, error_dir: Path):
         #data_size_valid = True if file['data_size'] == (channel_size * 2) + 4 else False
     return file
 
+def write_wav(input_file: Path, output_dir: Path, ebl_file):
+    wav_header_length = 16
+    wav_pcm_mode = 1
+
+    # Imported Variables:
+    wav_sample_rate = ebl_file['header_data']['v10']
+    wav_channels = 2
+    wav_bps = 16  # No idea from where lol
+    
+    # Calculated Variables
+    wav_channels = 1 if ebl_file['channel_2_size'] == 0 else 2
+
+    wav_byte_rate = int(
+        wav_sample_rate * wav_channels * wav_bps * (1 / 8)
+    )  # SampleRate * NumChannels * BitsPerSample/8
+    wav_block_align = int(
+        wav_channels * wav_bps * (1 / 8)
+    )  #  NumChannels * BitsPerSample/8
+
+    # Actual File Data
+    if wav_channels == 1:
+        wav_data = ebl_file['channel_1_data']
+    else:
+        wav_data = bytes(stereo_wav_byte_gen(ebl_file['channel_1_data'], ebl_file['channel_2_data']))
+
+    # Size Blocks
+    wav_data_size = ebl_file['channel_1_size'] + ebl_file['channel_2_size']
+    wav_file_size = wav_data_size + 36
+
+    if vars(args)['no_write']:
+        print('Not Writing to disk...')
+    else:
+        try:
+            if vars(args)['preserve_filename']:
+                output_file = input_file.stem + '.wav'
+            else:
+                output_file = ebl_file['header_3']['filename'].replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
+                #output_file = re.sub('[^A-Za-z0-9 #-_]+', '', output_file) # This Doesn't work.
+                output_file = output_file.replace("\x22", "") # "
+                output_file = output_file.replace("\x5c", "") # \
+                output_file = output_file.replace("\x2f", "") # /
+                output_file = output_file.replace("\x2a", "") # *
+                output_file = output_file.replace("\x3e", "") # >
+                output_file = output_file.replace("\x3f", "") # ?
+                # Some more problem files (on large dataset...)
+                #.waved to write T.Bansuri B2
+                # Failed to write T.Bansuri C#4♦.wav
+                #Failed to write T.Bansuri F#4↕▼♠.wav
+                #Failed to write Bon Di L C#3   ↕.wav
+                #Failed to write Bon Di L D#3   →.wav
+                #Failed to write Bon Di L E3#2 §☼.wav
+                #Failed to write Bon Di L A#4   §.wav
+                output_file = output_file + ".wav"
+            with open(Path(output_dir, output_file), mode="wb") as file_writer:
+                file_writer.write(b"RIFF")
+                file_writer.write(wav_file_size.to_bytes(4, byteorder="little"))
+                file_writer.write(b"WAVE")
+                file_writer.write(b"fmt ")
+                file_writer.write(
+                    wav_header_length.to_bytes(4, byteorder="little")
+                )  # Write 16 (header length 32 bit)
+                file_writer.write(wav_pcm_mode.to_bytes(2, byteorder="little"))  # Write 1 (16 bit)
+                file_writer.write(
+                    wav_channels.to_bytes(2, byteorder="little")
+                )  # Write # channels (16 bit)
+                file_writer.write(
+                    wav_sample_rate.to_bytes(4, byteorder="little")
+                )  # Write Sample Rate, 32 bit int
+
+                file_writer.write(
+                    wav_byte_rate.to_bytes(4, byteorder="little")
+                )  # write 88200 (32 bit)
+
+                file_writer.write(wav_block_align.to_bytes(2, byteorder="little"))  # Write 4 (16 bit)
+                file_writer.write(
+                    wav_bps.to_bytes(2, byteorder="little")
+                )  # Write 16 Bits per sample (16 bit)
+                file_writer.write(b"data")
+                file_writer.write(
+                    wav_data_size.to_bytes(4, byteorder="little")
+                )  # Write Size of actual audio...
+                file_writer.write(wav_data)
+        except:
+            print(f"Failed to write {output_file}")
+    return
 
 def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
     try:
@@ -174,91 +259,7 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
         if vars(args)['error_save']:
             Path(error_dir, input_file.name).write_bytes(input_file.read_bytes())
     else:
-        wav_header_length = 16
-        wav_pcm_mode = 1
-
-        # Imported Variables:
-        wav_sample_rate = ebl_file['header_data']['v10']
-        wav_channels = 2
-        wav_bps = 16  # No idea from where lol
-        
-        # Calculated Variables
-        wav_channels = 1 if ebl_file['channel_2_size'] == 0 else 2
-
-        wav_byte_rate = int(
-            wav_sample_rate * wav_channels * wav_bps * (1 / 8)
-        )  # SampleRate * NumChannels * BitsPerSample/8
-        wav_block_align = int(
-            wav_channels * wav_bps * (1 / 8)
-        )  #  NumChannels * BitsPerSample/8
-
-        # Actual File Data
-        if wav_channels == 1:
-            wav_data = ebl_file['channel_1_data']
-        else:
-            wav_data = bytes(stereo_wav_byte_gen(ebl_file['channel_1_data'], ebl_file['channel_2_data']))
-
-        # Size Blocks
-        wav_data_size = ebl_file['channel_1_size'] + ebl_file['channel_2_size']
-        wav_file_size = wav_data_size + 36
-
-        if vars(args)['no_write']:
-            print('Not Writing to disk...')
-        else:
-            try:
-                if vars(args)['preserve_filename']:
-                    output_file = input_file.stem + '.wav'
-                else:
-                    output_file = ebl_file['header_3']['filename'].replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
-                    #output_file = re.sub('[^A-Za-z0-9 #-_]+', '', output_file) # This Doesn't work.
-                    output_file = output_file.replace("\x22", "") # "
-                    output_file = output_file.replace("\x5c", "") # \
-                    output_file = output_file.replace("\x2f", "") # /
-                    output_file = output_file.replace("\x2a", "") # *
-                    output_file = output_file.replace("\x3e", "") # >
-                    output_file = output_file.replace("\x3f", "") # ?
-                    # Some more problem files (on large dataset...)
-                    #.waved to write T.Bansuri B2
-                    # Failed to write T.Bansuri C#4♦.wav
-                    #Failed to write T.Bansuri F#4↕▼♠.wav
-                    #Failed to write Bon Di L C#3   ↕.wav
-                    #Failed to write Bon Di L D#3   →.wav
-                    #Failed to write Bon Di L E3#2 §☼.wav
-                    #Failed to write Bon Di L A#4   §.wav
-                    output_file = output_file + ".wav"
-                with open(Path(output_dir, output_file), mode="wb") as file_writer:
-                    file_writer.write(b"RIFF")
-                    file_writer.write(wav_file_size.to_bytes(4, byteorder="little"))
-                    file_writer.write(b"WAVE")
-                    file_writer.write(b"fmt ")
-                    file_writer.write(
-                        wav_header_length.to_bytes(4, byteorder="little")
-                    )  # Write 16 (header length 32 bit)
-                    file_writer.write(wav_pcm_mode.to_bytes(2, byteorder="little"))  # Write 1 (16 bit)
-                    file_writer.write(
-                        wav_channels.to_bytes(2, byteorder="little")
-                    )  # Write # channels (16 bit)
-                    file_writer.write(
-                        wav_sample_rate.to_bytes(4, byteorder="little")
-                    )  # Write Sample Rate, 32 bit int
-
-                    file_writer.write(
-                        wav_byte_rate.to_bytes(4, byteorder="little")
-                    )  # write 88200 (32 bit)
-
-                    file_writer.write(wav_block_align.to_bytes(2, byteorder="little"))  # Write 4 (16 bit)
-                    file_writer.write(
-                        wav_bps.to_bytes(2, byteorder="little")
-                    )  # Write 16 Bits per sample (16 bit)
-                    file_writer.write(b"data")
-                    file_writer.write(
-                        wav_data_size.to_bytes(4, byteorder="little")
-                    )  # Write Size of actual audio...
-                    file_writer.write(wav_data)
-            except:
-                print(f"Failed to write {output_file}")
-
-
+        write_wav(input_file, output_dir, ebl_file)
 
 def main(input_dir, output_dir, args):
     """Main entry point of the app"""
