@@ -24,8 +24,12 @@ def debug_mode(header: dict) -> None:
     )
     print(f"Header 4: {header_4_check}, read {header_4_read-header_3_read}/14 bytes.")
     print(f"Data Size Valid: {data_size_valid}, read {actual_data_size} bytes.")
-
     return None
+
+def debug(input: str):
+    #print('Entered...' + str(DEBUG_MODE))
+    if DEBUG_MODE:
+        print(input)
 
 def recursive_scan(input_dir: Path) -> None:
     print(f"Scanning {input_dir.absolute()}/ ...", end='')
@@ -57,12 +61,13 @@ def recursive_scan(input_dir: Path) -> None:
                 input_file = Path(file['input_dir'], file['filename'])
                 #output_file = Path(file['output_dir'], file['filename'])
                 print(f"Converting file {i}/{number_files}", end='\r')
-                try:
-                    convert_file(input_file, file['output_dir'], Path(output_dir, "errors"))
-                except:
-                    print(f"cant read {input_file}... ")
-                else:
-                    i += 1
+                #try:
+                convert_file(input_file, file['output_dir'], Path(output_dir, "errors"))
+                #except:
+                #    print(f"cant read {input_file}... ")
+                #else:
+                i += 1
+            i -= 1
             print(f"\nConverted {i} files.", end="\n")
     return None
 
@@ -76,6 +81,16 @@ def stereo_wav_byte_gen(a1, a2):
             except StopIteration:
                 return
 
+def dummy_file():
+    test_file = {'header_data': {}, 'header_3': {}}
+    test_file['header_data']['frequency'] = 44100
+    test_file['channel_1_size'] = 8
+    test_file['channel_2_size'] = 16
+    test_file['channel_1_data'] = b'\x00\x01\x02\x03\x04\x05\x06\x0F'
+    test_file['channel_2_data'] = b'\xE0\xE1\xE2\xE3\xE4\xE5\xE6\xEF\xF0\xF1\xF2\xF3\xF4\xF5\xF6\xFF'
+    test_file['header_3']['filename'] = 'C\x004\x00 \x00L\x00F'
+    return test_file
+
 def read_ebl_file(input_file: Path, error_dir: Path):
     file = {"filename": input_file.name, "path": input_file, "read": 0, "size": 0}
     with open(input_file, mode="rb") as file_reader:
@@ -87,7 +102,7 @@ def read_ebl_file(input_file: Path, error_dir: Path):
         file['header_1'] = {
                                 "prefix": (byte := file_reader.read(4)), # "FORM"
                                 "filesize": int.from_bytes(byte := file_reader.read(4), "big"), # FileSize - 8 (i.e how many bytes are left)
-                                "size": file_reader.tell()
+                                "read": file_reader.tell()
                             }
         file['read'] = file_reader.tell()
 
@@ -95,7 +110,7 @@ def read_ebl_file(input_file: Path, error_dir: Path):
         file['header_2'] = {
                                 "prefix": (byte := file_reader.read(8)),  # "E5B0TOC2"
                                 "next_header_bytes": int.from_bytes(byte := file_reader.read(4), "big"), # Length of the next Chunk??? 78.
-                                "read": file_reader.tell()# - file['read']
+                                "read": file_reader.tell() - file['read']
                             }
         file['read'] = file_reader.tell()
 
@@ -106,16 +121,24 @@ def read_ebl_file(input_file: Path, error_dir: Path):
                                 "data": int.from_bytes(byte := file_reader.read(4), "big"),  # ??? 98
                                 "zeros": file_reader.read(2), # 0's here. No idea why.
                                 "filename": (byte := file_reader.read(64)).decode("utf-8"), # The following 64 bytes are the track name, more or less encoded utf-8.
-                                "read": file_reader.tell()
+                                "read": file_reader.tell() - file['read']
                             }
         file['read'] = file_reader.tell()
 
+        header_3_padding = file['header_3']['data'] - file['read']
+        if header_3_padding > 0:
+            file['padding'] = header_3_padding
+            file_reader.read(header_3_padding)
+            #debug(f"{file['read']} After Header 3, should be {file['header_3']['data']}, needing {header_3_padding} bytes of padding.")
+        else:
+            file['padding'] = 0
+        
         # Another E5S1 header. 14 bytes. No idea why.
         file['header_4'] = {
                                 'prefix': (byte := file_reader.read(4)),  # "E5S1"
                                 'size': int.from_bytes(byte := file_reader.read(4), "big"), # 343482
                                 'data': (byte := file_reader.read(6)), # 256 be, 1 le
-                                'read': file_reader.tell()
+                                'read': file_reader.tell() - file['read']
                             }
         file['read'] = file_reader.tell()
 
@@ -132,45 +155,69 @@ def read_ebl_file(input_file: Path, error_dir: Path):
                                 'v7': int.from_bytes(byte := file_reader.read(4), "little"), # Data size (including offset). 171832
                                 'v8': int.from_bytes(byte := file_reader.read(4), "little"), # 184. Start of Audio Data?
                                 'v9': int.from_bytes(byte := file_reader.read(4), "little"), # 171832. End of data for this channel?
-                                'v10': int.from_bytes(byte := file_reader.read(4), "little"),# Frequency. Typically 44100 (hz)
+                                'frequency': int.from_bytes(byte := file_reader.read(4), "little"),# Frequency. Typically 44100 (hz)
                                 'v11': int.from_bytes(byte := file_reader.read(4), "little"),# 0. Unknown.
                                 'v12': int.from_bytes(byte := file_reader.read(4), "little"),# Unknown but maybe number of channels, bitrate idk.
-                                'padding': file_reader.read(72),
-                                'read': file_reader.tell()
+                                'comment': (byte := file_reader.read(64)),
+                                'read': file_reader.tell() - file['read']
         }
+
+        # This block was revealed to me in a dream
+        file['channel_1_size'] = (file['header_data']['v3'] - file['header_data']['v2'])
+        file['channel_2_size'] = (file['header_data']['v5'] - file['header_data']['v4'])  
+
+        if file['channel_1_size'] == file['channel_2_size']:
+            #debug("Channels same Length")
+            if file['channel_1_size'] == 0:
+                #debug(f"MONO DETECTED.")
+                file['channel_1_size'] = file['header_data']['v4'] - file['header_data']['v3'] + 2
+                file['channel_2_size'] = 0
+        else:
+            debug("Error: Channels Different length.")
+
+        file['data_size_calc'] = file['channel_1_size'] + file['channel_2_size']
+
+        #data_padding = file['header_data']['v2'] - 180 + file['padding'] # v1
+        #data_padding = file['header_data']['v2'] - 180 # + file['padding'] # v2
+        data_padding = file['header_data']['v5'] - file['data_size_calc'] - 178 # v3. Probably can read 178 somewhere.
+        if data_padding > 0:
+            #debug(f"READ {data_padding} bytes of data padding!")
+            file_reader.read(data_padding)
+
         file['read'] = file_reader.tell()
         file['header_read'] = file['read']
 
-        # How much data is in each channel? We minus 4 to avoid the empty byte.
-        file['channel_1_size'] = (file['header_data']['v4'] - 186)
-        file['channel_2_size'] = (file['header_data']['v5'] - file['header_data']['v4'] - 4)
-
-        file['channel_2_size'] = 0 if file['channel_2_size'] == -4 else file['channel_2_size']
-        
-        file['data_size'] = file['size'] - file['header_read']
+        file['data_size_est'] = file['size'] - file['header_read']
 
         file['channel_1_data'] = file_reader.read(file['channel_1_size'])
-        data_padding = int.from_bytes(
-            byte := file_reader.read(4), "little"
-        )  # Should be zeros all the time. LOL
         file['channel_2_data'] = file_reader.read(file['channel_2_size'])
 
-        #header_1_check = True if file['header_1']['prefix'] == b"FORM" else False
-        #header_1_valid = (
-        #    True if file['header_1']['filesize'] == file['size'] - file['header_1']['size'] else False
-        #)  # Checks if the remaining bytes in header 1 is correct.
-        #header_2_check = True if file['header_2']['prefix'] == b"E5B0TOC2" else False
-        #header_3_check = True if file['header_2']['prefix'] == b"E5S1" else False
-        #header_4_check = True if file['header_4']['prefix'] == b"E5S1" else False
-        #data_size_valid = True if file['data_size'] == (channel_size * 2) + 4 else False
+        end_of_data = file_reader.tell()
+        file['read'] = file_reader.tell()
+        #debug(f"Data Size: {file['header_read']}")
+        #debug(f"Padding: {data_padding}")
+        #debug(f"Header Read: {testing_header_read}, Padding: {file['header_read']}")
+        #debug(f"C1: {file['channel_1_size']}, C2: {file['channel_2_size']}")
+        #debug(f"C1: {c1}, C2: {c2}")
+        #debug(input_file.name)
+        #debug(f"C1 s: {file['channel_1_data'][0:8]}")
+        #debug(f"WARN: Inconsistent filesize: Read: {end_of_data}, Expected: {file['size']}, Difference: {file['size']-end_of_data}")
+        
+        if end_of_data != file['size']:
+            if (file['size']-end_of_data) != 40:
+                debug(f"WARN: Inconsistent filesize: Read: {end_of_data}, Expected: {file['size']}, Difference: {file['size']-end_of_data}")
+            else:
+                debug("WARN: Found 40 bytes. Additional data header.")
     return file
 
 def write_wav(input_file: Path, output_dir: Path, ebl_file):
+    #ebl_file = dummy_file()
+
     wav_header_length = 16
     wav_pcm_mode = 1
 
     # Imported Variables:
-    wav_sample_rate = ebl_file['header_data']['v10']
+    wav_sample_rate = ebl_file['header_data']['frequency']
     wav_channels = 2
     wav_bps = 16  # No idea from where lol
     
@@ -198,6 +245,7 @@ def write_wav(input_file: Path, output_dir: Path, ebl_file):
         print('Not Writing to disk...')
     else:
         try:
+        #if True:
             if vars(args)['preserve_filename']:
                 output_file = input_file.stem + '.wav'
             else:
@@ -260,13 +308,17 @@ def convert_file(input_file: Path, output_dir: Path, error_dir: Path):
             Path(error_dir, input_file.name).write_bytes(input_file.read_bytes())
     else:
         write_wav(input_file, output_dir, ebl_file)
+        
 
 def main(input_dir, output_dir, args):
     """Main entry point of the app"""
     print("Starting File Convert")
 
-    if __debug_mode__:
-        debug_mode()
+    #if __debug_mode__:
+    #    debug_mode()
+    
+    global DEBUG_MODE 
+    DEBUG_MODE = True if vars(args)['debug'] else False
 
     if not vars(args)['no_write']: Path(output_dir, "errors").mkdir(parents=True, exist_ok=True)
     
@@ -282,9 +334,9 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
 
-    default_input_dir = Path.cwd().joinpath("input")
+    default_input_dir = Path.cwd().joinpath("input_4")
     #default_input_dir = Path("src/input/test.ebl") # Testing Single File Input
-    default_output_dir = Path.cwd().joinpath("output")
+    default_output_dir = Path.cwd().joinpath("output_4")
 
     # input_dir = parser.add_argument("input_dir", action="store")
     input_dir = default_input_dir
@@ -294,7 +346,7 @@ if __name__ == "__main__":
 
     # --debug y/n
     parser.add_argument(
-        "-d", "--debug", action="count", default=False, help="Debug <True|False>"
+        "-d", "--debug", action="store_true", default=False, help="Debug <True|False>"
     )
 
     parser.add_argument(

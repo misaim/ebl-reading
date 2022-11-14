@@ -2,8 +2,8 @@
 The following is a rudimentary script to convert propritary E-mu EBL files into a usable audio format - WAV.
 
 Currently:
- - PASS: 41925 Files
- - FAIL: 51 ish Files
+ - PASS: 41968 Files
+ - FAIL: 8 Files
  - VERIFIED: :) 
 
 ## Dependancies
@@ -54,10 +54,12 @@ Standard "EXB" file structure looks like the following:
         Sample1.ebl
         etc...
         
-## EBL Files
+## EBL Files - NB The following is out of date. To be fixed!
 The following is my notes from reading a few dozen EBL files.
 
 EBL files are weird - the headers are mostly Big Endian byte order, although the data headers are in Little Endian.
+
+
 
 ### Preliminary File Header is 8 bytes.
 - header_1_prefix. "FORM"
