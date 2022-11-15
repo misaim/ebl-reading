@@ -260,25 +260,8 @@ def write_wav(input_file: Path, output_dir: Path, ebl_file):
             if vars(args)['preserve_filename']:
                 output_file = input_file.stem + '.wav'
             else:
-                #output_file = ebl_file['header_3']['filename'].replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
                 # Strict rules (Windows friendly)
                 output_file = re.sub('[^0-9a-zA-Z\.,:%\-_#]+', '', ebl_file['header_3']['filename']) # This Doesn't work.
-
-                #output_file = output_file.replace("\x22", "") # "
-                #output_file = output_file.replace("\x5c", "") # \
-                #output_file = output_file.replace("\x2f", "") # /
-                #output_file = output_file.replace("\x2a", "") # *
-                #output_file = output_file.replace("\x3e", "") # >
-                #output_file = output_file.replace("\x3f", "") # ?
-
-                # Some more problem files (on large dataset...)
-                #.waved to write T.Bansuri B2
-                # Failed to write T.Bansuri C#4♦.wav
-                #Failed to write T.Bansuri F#4↕▼♠.wav
-                #Failed to write Bon Di L C#3   ↕.wav
-                #Failed to write Bon Di L D#3   →.wav
-                #Failed to write Bon Di L E3#2 §☼.wav
-                #Failed to write Bon Di L A#4   §.wav
                 output_file = output_file + ".wav"
             with open(Path(output_dir, output_file), mode="wb") as file_writer:
                 file_writer.write(b"RIFF")
