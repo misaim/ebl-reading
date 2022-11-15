@@ -1,21 +1,21 @@
-# EBL to WAV Converion Script
-The following is a rudimentary script to convert propritary E-mu EBL files into a usable audio format - WAV.
+# EBL to WAV Conversion Script
+The following is a rudimentary script to convert proprietary E-mu EBL files into a usable audio format - WAV.
 
 Currently:
- - PASS: 41968 Files
- - FAIL: 8 Files
+ - PASS: 42352 Files, 6.49gb
+ - FAIL: 0 Files, 0gb
  - VERIFIED: :) 
 
-## Dependancies
+## Dependencies
 Python 3.9+
 
 ## Usage
 Reads either a directory or individual file, and writes to specified output directory.
 
-Directorys are recursivly scanned, with all ebl files proccessed and file structure retained in output dir.
+Directories are recursively scanned, with all ebl files processed and file structure retained in output dir.
 
 Options:
- - -d: Debug - Currently not working.
+ - -d: Debug - Prints Debug Messages, mostly EBL file read warnings. Catches extra data header bytes (40).
  - -p: Preserve Filename. Keeps original EBL filename, instead of the metadata encoded filename from Emulator X-3
  - -n: No-Write. Doesn't write anything to disk. Useful for verification of reads.
  - -e: Error Save. Writes files which can't be read to /output/errors/.
@@ -54,12 +54,10 @@ Standard "EXB" file structure looks like the following:
         Sample1.ebl
         etc...
         
-## EBL Files - NB The following is out of date. To be fixed!
-The following is my notes from reading a few dozen EBL files.
+## EBL Files
+The following is my notes on EBL file structure.
 
 EBL files are weird - the headers are mostly Big Endian byte order, although the data headers are in Little Endian.
-
-
 
 ### Preliminary File Header is 8 bytes.
 - header_1_prefix. "FORM"
@@ -75,6 +73,7 @@ EBL files are weird - the headers are mostly Big Endian byte order, although the
 - header_3_data = Big Endian 32 bit int. No idea what this is for. Typically 98.
 - 2 empty bytes.
 - file_name_1. 64 bytes, UTF-8 encoded string.
+- (Optional) 0-padding. Based on header_2_data length of chunk.
 
 ### Another E5S1 header. 14 bytes. No idea why.
 - header_4_prefix. "E5S1"
@@ -87,22 +86,23 @@ EBL files are weird - the headers are mostly Big Endian byte order, although the
 #### We then have several little endian 32-bit ints.
 - variable_1 - Unsure.
 
-- variable_2. Data Offset. Typically 184.
-- variable_3. Data size (including offset).
-- variable_4. Data size - 2 (Not sure why?).
-- variable_5. Close to the end of file in bytes. Not sure. Could also be all Audio Data.
+- variable_2. Start of Channel 1, offset from byte 10 of E5S1 header 2.
+- variable_3. End of Channel 1, offset from byte 10 of E5S1 header 2.
+- variable_4. Start of Channel 2, offset from byte 12 of E5S1 header 2.
+- variable_5. End of Channel 2, offset from byte 12 of E5S1 header 2.
 
-- variable_6. Chanel 1 Data Offset.
-- variable_7. Chanel 1 Data size (including offset).
-- variable_8. Chanel 2 Data Offset?
-- variable_9. End of data for this channel?
+- variable_6. Unknown and Unused. Could be Channel 1 start replicated but not consistent.
+- variable_7. Unknown and Unused. Could be Channel 1 end replicated but not consistent.
+- variable_8. Unknown and Unused.
+- variable_9. Unknown and Unused.
 
 - variable_10. Frequency. Typically 44100 (hz)
-- variable_11. Always 0.
-- variable_12. Unknown but maybe number of channels, bitrate and some other things go here. 
+- variable_11. Always 0. Unused.
+- variable_12. Unknown but maybe number of channels, bitrate and some other things go here. Unused.
 
 - data_description. 64 bytes, UTF-8 encoded string.
-- data_unknown. 8 bytes.
+
+- Padding. Sometimes has data, seems to be when data_description contains data. Calculated at V5 - (V3-V2 + V5-V4) - 178. Don't ask me why but it works.
 
 ### Data (Remaining Bytes)
 Audio data appears to be 16bit audio, however the format is different from a wav.
@@ -113,7 +113,7 @@ WAV Files store samples as paired Left and Right Channels - i.e
     ...
     LLLL RRRR
 
-EBL Files take a different tact, splitting Left and Right into continuous chunks, with 4 null bytes padding.
+EBL Files take a different tact, splitting Left and Right into continuous chunks.
 
     LLLL LLLL
     LLLL LLLL

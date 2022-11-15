@@ -10,6 +10,8 @@ __debug_mode__ = False
 import argparse
 from pathlib import Path
 import re
+from datetime import timedelta
+import time
 #from syslog import LOG_LOCAL0
 
 # TODO: import logging
@@ -33,22 +35,26 @@ def debug(input: str):
 
 def recursive_scan(input_dir: Path) -> None:
     print(f"Scanning {input_dir.absolute()}/ ...", end='')
+    number_files_total = 0
+    number_files_converted = 0
+
     directory_dict = {}
     for p in input_dir.rglob("*"):
         if p.suffix == ".ebl":
+            number_files_total += 1
             input_dir_suffix = str(p.parent).split(str(input_dir))[1]
             output_dir_stem = Path(str(output_dir) + input_dir_suffix)
             if input_dir_suffix in directory_dict:
                 directory_dict[input_dir_suffix].append({'filename': p.name, 'input_dir': p.parent, 'output_dir': output_dir_stem})
             else:
                 directory_dict[input_dir_suffix] = [{'filename': p.name, 'input_dir': p.parent, 'output_dir': output_dir_stem}]
-    print("Done.")
+    print(f"Done.\nPlanning to process {number_files_total} EBL files.")
 
     # Fucks off the "" element (root). Not required by pathlib but looks pretty.
     if "" in directory_dict: 
         directory_dict["/"] = directory_dict[""]
         directory_dict.pop("")
-
+    start_time = time.monotonic()
     for key in directory_dict:
         number_files = len(directory_dict[key])
         print(f"\t{key} - {number_files} file(s).")
@@ -56,19 +62,21 @@ def recursive_scan(input_dir: Path) -> None:
             output_location = Path(str(output_dir)+key)
             output_location.mkdir(parents=True, exist_ok=True)
             #Path(output_dir, "errors").mkdir(parents=True, exist_ok=True)
-            i = 1
+            i = 0
             for file in directory_dict[key]:
                 input_file = Path(file['input_dir'], file['filename'])
                 #output_file = Path(file['output_dir'], file['filename'])
-                print(f"Converting file {i}/{number_files}", end='\r')
-                #try:
-                convert_file(input_file, file['output_dir'], Path(output_dir, "errors"))
-                #except:
-                #    print(f"cant read {input_file}... ")
-                #else:
-                i += 1
-            i -= 1
-            print(f"\nConverted {i} files.", end="\n")
+                #print(f"Converting file {i}/{number_files}", end='\r')
+                try:
+                    convert_file(input_file, file['output_dir'], Path(output_dir, "errors"))
+                except:
+                    print(f"ERROR: unable to read {input_file}... ")
+                else:
+                    i += 1
+                    number_files_converted += 1
+            print(f"Converted {i} files in folder.", end="\n")
+    end_time = time.monotonic()
+    print(f"Converted {number_files_converted}/{number_files_total} files. Duration: {timedelta(seconds=end_time - start_time)}")
     return None
 
 def stereo_wav_byte_gen(a1, a2):
@@ -120,7 +128,7 @@ def read_ebl_file(input_file: Path, error_dir: Path):
                                 "data_size": int.from_bytes(byte := file_reader.read(4), "big"), # 343480. The Size after "header_4_data" below, i.e byte >= 108
                                 "data": int.from_bytes(byte := file_reader.read(4), "big"),  # ??? 98
                                 "zeros": file_reader.read(2), # 0's here. No idea why.
-                                "filename": (byte := file_reader.read(64)).decode("utf-8"), # The following 64 bytes are the track name, more or less encoded utf-8.
+                                "filename": str((byte := file_reader.read(64)).decode("utf-8")), # The following 64 bytes are the track name, more or less encoded utf-8.
                                 "read": file_reader.tell() - file['read']
                             }
         file['read'] = file_reader.tell()
@@ -133,6 +141,8 @@ def read_ebl_file(input_file: Path, error_dir: Path):
         else:
             file['padding'] = 0
         
+        #print(str(file['header_3']['filename']))
+
         # Another E5S1 header. 14 bytes. No idea why.
         file['header_4'] = {
                                 'prefix': (byte := file_reader.read(4)),  # "E5S1"
@@ -173,7 +183,8 @@ def read_ebl_file(input_file: Path, error_dir: Path):
                 file['channel_1_size'] = file['header_data']['v4'] - file['header_data']['v3'] + 2
                 file['channel_2_size'] = 0
         else:
-            debug("Error: Channels Different length.")
+            if file['channel_1_size'] * file['channel_2_size'] != 0:
+                debug(f"Error: Channels Different length. C1: {file['channel_1_size']}, C2: {file['channel_2_size']}")
 
         file['data_size_calc'] = file['channel_1_size'] + file['channel_2_size']
 
@@ -205,7 +216,7 @@ def read_ebl_file(input_file: Path, error_dir: Path):
         
         if end_of_data != file['size']:
             if (file['size']-end_of_data) != 40:
-                debug(f"WARN: Inconsistent filesize: Read: {end_of_data}, Expected: {file['size']}, Difference: {file['size']-end_of_data}")
+                print(f"ERROR: Inconsistent filesize: Read: {end_of_data}, Expected: {file['size']}, Difference: {file['size']-end_of_data}")
             else:
                 debug("WARN: Found 40 bytes. Additional data header.")
     return file
@@ -249,22 +260,8 @@ def write_wav(input_file: Path, output_dir: Path, ebl_file):
             if vars(args)['preserve_filename']:
                 output_file = input_file.stem + '.wav'
             else:
-                output_file = ebl_file['header_3']['filename'].replace("\x00", "") # Dirty Hack to remove problem chars from output file names.
-                #output_file = re.sub('[^A-Za-z0-9 #-_]+', '', output_file) # This Doesn't work.
-                output_file = output_file.replace("\x22", "") # "
-                output_file = output_file.replace("\x5c", "") # \
-                output_file = output_file.replace("\x2f", "") # /
-                output_file = output_file.replace("\x2a", "") # *
-                output_file = output_file.replace("\x3e", "") # >
-                output_file = output_file.replace("\x3f", "") # ?
-                # Some more problem files (on large dataset...)
-                #.waved to write T.Bansuri B2
-                # Failed to write T.Bansuri C#4♦.wav
-                #Failed to write T.Bansuri F#4↕▼♠.wav
-                #Failed to write Bon Di L C#3   ↕.wav
-                #Failed to write Bon Di L D#3   →.wav
-                #Failed to write Bon Di L E3#2 §☼.wav
-                #Failed to write Bon Di L A#4   §.wav
+                # Strict rules (Windows friendly)
+                output_file = re.sub('[^0-9a-zA-Z\.,:%\-_#]+', '', ebl_file['header_3']['filename']) # This Doesn't work.
                 output_file = output_file + ".wav"
             with open(Path(output_dir, output_file), mode="wb") as file_writer:
                 file_writer.write(b"RIFF")
@@ -334,9 +331,9 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
 
-    default_input_dir = Path.cwd().joinpath("input_4")
+    default_input_dir = Path.cwd().joinpath("input")
     #default_input_dir = Path("src/input/test.ebl") # Testing Single File Input
-    default_output_dir = Path.cwd().joinpath("output_4")
+    default_output_dir = Path.cwd().joinpath("output")
 
     # input_dir = parser.add_argument("input_dir", action="store")
     input_dir = default_input_dir
