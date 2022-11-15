@@ -113,7 +113,7 @@ WAV Files store samples as paired Left and Right Channels - i.e
     ...
     LLLL RRRR
 
-EBL Files take a different tact, splitting Left and Right into continuous chunks, with 4 null bytes padding.
+EBL Files take a different tact, splitting Left and Right into continuous chunks.
 
     LLLL LLLL
     LLLL LLLL
