@@ -30,7 +30,7 @@ Convert every .ebl file in `/path/to/input/` recursively. Outputs to `CWD/ebl_re
 
     python3 /path/to/code/main.py -i /path/to/input/
 
-Convert file.ebl. `Outputs to CWD/<filename>.wav`. Note that `<filename>` is taken from Emulator X-3 specified filenames encoded in header. Disable this with -p (Preserve Filenames).
+Convert file.ebl. Outputs to `CWD/<filename>.wav`. Note that `<filename>` is taken from Emulator X-3 specified filenames encoded in header. Disable this with -p (Preserve Filenames).
 
     python3 /path/to/code/main.py -i file.wav -o .
 
