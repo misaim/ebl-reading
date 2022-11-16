@@ -27,16 +27,20 @@ Takes either a directory or individual file, and writes to an optionally specifi
 ### Examples
 
 Convert every .ebl file in `/path/to/input/` recursively. Outputs to `CWD/ebl_read_<unix-timestamp>/`, in the same structure as the original files.
-    `python3 /path/to/code/main.py -i /path/to/input/`
+
+    python3 /path/to/code/main.py -i /path/to/input/
 
 Convert file.ebl. `Outputs to CWD/<filename>.wav`. Note that `<filename>` is taken from Emulator X-3 specified filenames encoded in header. Disable this with -p (Preserve Filenames).
-    `python3 /path/to/code/main.py -i file.wav -o .`
+
+    python3 /path/to/code/main.py -i file.wav -o .
 
 Validate every .ebl file in `/path/to/input/` recursively. Attempts to open every ebl file without converting it, saving errors to `CWD/errors/`. Useful to check for ebl files which can't be read.
-    `python3 /path/to/code/main.py -i /path/to/input/ -o . -n -d -e `
+
+    python3 /path/to/code/main.py -i /path/to/input/ -o . -n -d -e 
 
 Convert every .ebl file in `/path/to/input/` recursively. Outputs to `/path/to/input/`, and removes everything that isn't a WAV. Useful for preparing files for upload, but be careful!
-    `python3 /path/to/code/main.py -i /path/to/input/ -o /path/to/input/ && find /path/to/input/ -type f -not -name '*.wav' -delete`
+
+    python3 /path/to/code/main.py -i /path/to/input/ -o /path/to/input/ && find /path/to/input/ -type f -not -name '*.wav' -delete
 
 ### Options
  - -i: Input (Required). An input ebl file or folder containing preferably ebl files.
