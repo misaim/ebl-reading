@@ -1,3 +1,33 @@
+#!/usr/bin/env python3.9
+
+"""
+Convert E-MU Emulator X-3 EBL files to WAV.
+"""
+
+"""
+MIT License
+
+Copyright (c) 2022 https://github.com/misaim
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
 from pathlib import Path
 import re
 
@@ -192,9 +222,7 @@ def write_wav(input_file: Path, output_dir: Path, ebl_file):
     wav_data_size = ebl_file['channel_1_size'] + ebl_file['channel_2_size']
     wav_file_size = wav_data_size + 36
 
-    if NO_WRITE:
-        print('Not Writing to disk...')
-    else:
+    if not NO_WRITE:
         if PRESERVE_FILENAME:
             output_file = input_file.stem + '.wav'
         else:

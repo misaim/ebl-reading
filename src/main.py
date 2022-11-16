@@ -1,21 +1,44 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.9
+
 """
-Create .wav files from .ebl files
+CLI Tool to convert E-MU Emulator X-3 EBL files to WAV.
+"""
+
+"""
+MIT License
+
+Copyright (c) 2022 https://github.com/misaim
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 """
 
 __license__ = "MIT"
-__version__ = "0.0.1"
-__debug_mode__ = False
+__version__ = "1.0.0"
 
 import argparse
 from pathlib import Path
-from datetime import timedelta
 import time
 import ebl
 
 #from syslog import LOG_LOCAL0
 
-def recursive_scan(input_dir: Path) -> None:
+def recursive_scan(input_dir: Path, output_dir: Path) -> None:
     print(f"Scanning {input_dir.absolute()}/ ...", end='')
     number_files_total = 0
     number_files_converted = 0
@@ -31,7 +54,7 @@ def recursive_scan(input_dir: Path) -> None:
                 directory_dict[input_dir_suffix].append({'filename': p.name, 'input_dir': p.parent, 'output_dir': output_dir_stem})
             else:
                 directory_dict[input_dir_suffix] = [{'filename': p.name, 'input_dir': p.parent, 'output_dir': output_dir_stem}]
-    print(f"Done.\nPlanning to process {number_files_total} EBL files.")
+    print(f"Done.\nPlanning to process {number_files_total} EBL files in {input_dir}/")
 
     # Fucks off the "" element (root). Not required by pathlib but looks pretty.
     if "" in directory_dict: 
@@ -43,57 +66,72 @@ def recursive_scan(input_dir: Path) -> None:
     for key in directory_dict:
         number_files = len(directory_dict[key])
         print(f"{key} - {number_files} file(s).")
-        if not vars(args)['no_write']: 
-            output_location = Path(str(output_dir)+key)
+        #if not vars(args)['no_write']: 
+        output_location = Path(str(output_dir)+key)
+        if not ebl.NO_WRITE:
             output_location.mkdir(parents=True, exist_ok=True)
-            i = 0
-            for file in directory_dict[key]:
-                input_file = Path(file['input_dir'], file['filename'])
-                #print(f"Converting file {i}/{number_files}", end='\r')
-                file_status = ebl.convert_file(input_file, file['output_dir'], Path(output_dir, "errors"))
-                if file_status:
-                    i += 1
-                    number_files_converted += 1
-            print(f"Converted {i} files in folder.", end="\n")
+        i = 0
+        for file in directory_dict[key]:
+            input_file = Path(file['input_dir'], file['filename'])
+            #print(f"Converting file {i}/{number_files}", end='\r')
+            file_status = ebl.convert_file(input_file, file['output_dir'], Path(output_dir, "errors"))
+            if file_status:
+                i += 1
+                number_files_converted += 1
+        print(f"Converted {i} files in folder.", end="\n")
 
     end_time = time.perf_counter()
     print(f"Converted {number_files_converted}/{number_files_total} files. Duration: {end_time - start_time}s")
     return None
 
-def main(input_dir, output_dir, args):
+def main(args):
     """Main entry point of the app"""
 
     ebl.debug(f"DEBUG MODE: {ebl.DEBUG_MODE}, WRITE: {not ebl.NO_WRITE}, ERROR SAVE: {ebl.ERROR_SAVE}")
     
+    input_dir = vars(args)['input']
+    output_dir = vars(args)['output']
+
+    if output_dir == None:
+        output_dir = Path.cwd().joinpath("ebl_read_" + str(int(time.time())))
+        print(f"No output directory selected - Defaulting to {output_dir}")
+
     # Create error folder if we have to.
     if not ebl.NO_WRITE:
+        output_dir.mkdir(parents=True, exist_ok=True)
         if ebl.ERROR_SAVE:
             Path(output_dir, "errors").mkdir(parents=True, exist_ok=True)
 
-    # TODO Make this a bit nicer (Ideally add input/output from CLI)
     if input_dir.is_dir():
-        recursive_scan(input_dir)
+        recursive_scan(input_dir, output_dir)
     elif input_dir.is_file():
         if not vars(args)['no_write']:
-            ebl.convert_file(input_dir, output_dir, Path(output_dir, "errors"))
+            if input_dir.suffix == '.ebl':
+                file_status = ebl.convert_file(input_dir, output_dir, Path(output_dir, "errors"))
+                if file_status:
+                    print(f"Converted {input_dir.name}.")
+                else:
+                    print(f"Failed to convert {input_dir.name}.")
+            else:
+                print("Input file must be EBL.")
     else:
-        print("Please select a real file or folder!")
+        print("Input must be a file or directory.")
 
 if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     
     default_input_dir = Path.cwd().joinpath("input")
-    #default_input_dir = Path("src/input/test.ebl") # Testing Single File Input
-    default_output_dir = Path.cwd().joinpath("output")
+    default_output_dir = Path.cwd().joinpath("ebl_read_" + str(int(time.time())))
 
-    # input_dir = parser.add_argument("input_dir", action="store")
-    input_dir = default_input_dir
+    parser.add_argument(
+        "-i", "--input", type=Path, required=True, help="Input File/Directory. Required."
+    )
 
-    # output_dir = parser.add_argument("output_dir", action="store")
-    output_dir = default_output_dir
+    parser.add_argument(
+        "-o", "--output", type=Path, default=default_output_dir, help="Output location. Defaults to CWD."
+    )
 
-    # --debug y/n
     parser.add_argument(
         "-d", "--debug", action="store_true", default=False, help="Debug <True|False>"
     )
@@ -107,7 +145,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-e", "--error_save", action="store_true", default=False, help="Save errors to /errors/"
+        "-e", "--error_save", action="store_true", default=False, help="If present, save files with errors to /output/errors/"
     )
 
     # --version output
@@ -124,4 +162,4 @@ if __name__ == "__main__":
     ebl.PRESERVE_FILENAME = True if vars(args)['preserve_filename'] else False
     ebl.ERROR_SAVE = True if vars(args)['error_save'] else False
 
-    main(input_dir, output_dir, args)
+    main(args)
